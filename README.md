@@ -1,2 +1,2 @@
-# Robotica19-Projeto1
-Repositorio para o Projeto 1 da disciplina de Robotica Computacional
+# Robotica Computacional - Projeto 1
+Repositorio para o Projeto 1 da disciplina de Robotica Computacional.
