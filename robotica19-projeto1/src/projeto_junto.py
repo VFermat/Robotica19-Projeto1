@@ -31,7 +31,7 @@ atraso = 1.5E9
 
 # Só usar se os relógios ROS da Raspberry e do Linux desktop estiverem sincronizados. 
 # Descarta imagens que chegam atrasadas demais.
-check_delay = False
+check_delay = True
 
 cv_image = None
 cat_seen = False
@@ -40,7 +40,7 @@ image_center = (0, 0)
 
 bump = None
 v = 0.1
-w = 0.3
+w = 0.1
 min_distance = 0.3
 close_scan = False
 close_scan_velocity = None
@@ -58,6 +58,7 @@ def roda_todo_frame(imagem):
     global cat_seen
     global cat_center
     global image_center
+    global atraso
 
     now = rospy.get_rostime()
 
@@ -66,6 +67,7 @@ def roda_todo_frame(imagem):
     lag = now - imgtime # calcula o lag
 
     delay = lag.nsecs
+    #print("-----------DELAY: ", delay)
 
     if delay > atraso and check_delay == True:
         print("Descartando por causa do delay do frame:", delay)
@@ -77,19 +79,16 @@ def roda_todo_frame(imagem):
         cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
         centro, imagem, resultados =  visao_module.processa(cv_image)
 
-        image_center = (len(imagem) / 2, len(imagem[0]) / 2)
-        #print("Image centers: ", image_center)
+        image_center = centro
 
         for r in resultados:
-            if r[0] == "cat" or r[0] == "dog":
+            if r[0] == "bottle":
                 cat_seen = True
 
-                # Pegando o centro da imagem do gato:
-                cX = (r[2][0] + r[3][0]) / 2
-                cY = (r[2][1] + r[3][1]) / 2
-                cat_center = (cX, cY)
+                # Pegando o centro da imagem do objeto:
+                cat_center = r[4]
 
-                print("Cat seen! Center at: ", cat_center)
+                #print("[LOG] OBJECT FOUND! CENTER AT: ", cat_center)
 
         depois = time.clock()
 
@@ -123,7 +122,7 @@ def analyze_scan(datas):
 
 
     if smallest_distance <= min_distance:
-        print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)    
+        #print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)    
         close_scan = True
 
     else:
@@ -173,26 +172,25 @@ if __name__=="__main__":
 
         # Checking MobileNet
         if cat_seen:
-            dif = image_center[0] - cat_center[0]
+            dif = cat_center[0] - image_center[0]
             print("[LOG] DISTANCE: ", dif)
 
-            if dif > -120 and dif < -70 and close_scan == False:
-                print("[LOG] Moving FORWARD.")
-                publisher.publish(vel_forward)
-                rospy.sleep(0.2)
-                cat_seen = False
-                continue
-
-            elif dif > - 120:
+            if dif > 30:
                 print("[LOG] Turning LEFT.")
                 publisher.publish(vel_left)
                 rospy.sleep(time_to_walk)
                 cat_seen = False
 
-            elif dif < - 70:
+            elif dif < -30:
                 print("[LOG] Turning RIGHT.")
                 publisher.publish(vel_right)
                 rospy.sleep(time_to_walk)
+                cat_seen = False
+
+            elif close_scan == False:
+                print("[LOG] Moving FORWARD.")
+                publisher.publish(vel_forward)
+                rospy.sleep(0.2)
                 cat_seen = False
 
         # Checking Bumpers
