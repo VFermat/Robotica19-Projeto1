@@ -6,33 +6,56 @@ import rospy
 import numpy as np
 from math import sin, cos, radians
 from geometry_msgs.msg import Twist, Vector3
-from std_msgs.msg import UInt8, LaserScan
+from std_msgs.msg import UInt8
+from sensor_msgs.msg import LaserScan
 
 
 bump = None
 v = 0.1
 w = 0.3
-min_distance = 10
+min_distance = 0.3
 close_scan = False
 close_scan_velocity = None
+scan_v = None
+scan_w = None
+
+
 
 def get_bump(datas):
     global bump
     bump = datas.data
 
+
+
 def analyze_scan(datas):
     global close_scan
     global close_scan_velocity
+    global scan_v
+    global scan_w
+
     scan_ranges = datas.ranges
-    smallest_distance = min(scan_ranges)
+    #print("SCAN: ", scan_ranges)
+    scan_cone_front = list(scan_ranges[:45] + scan_ranges[315:])
+    print("SCAN CONE: ", scan_cone_front)
+
+    smallest_distance = min(scan_cone_front)
+
+    while smallest_distance <= 0.1:
+        del scan_cone_front[scan_cone_front.index(smallest_distance)]
+
+        smallest_distance = min(scan_cone_front)
+
+
+    print("SCAN CONE: ", scan_cone_front)
+    print("DIST: ", smallest_distance)    
+
     if smallest_distance <= min_distance:
         close_scan = True
-        angle = close_scan.index(smallest_distance)
-        scan_v = -sin(radians(angle))
-        scan_w = cos(radians(angle))
-        close_scan_velocity = Twist(Vector3(scan_v, 0, 0), Vector3(0, 0, scan_w))
+
     else:
         close_scan = False
+
+
 
 if __name__=="__main__":
 
@@ -43,7 +66,7 @@ if __name__=="__main__":
     scan_receiver = rospy.Subscriber("/scan", LaserScan, analyze_scan)
 
     while not rospy.is_shutdown():
-        
+        stop = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
         vel_forward = Twist(Vector3(v, 0, 0), Vector3(0, 0, 0))
         vel_backward = Twist(Vector3(-v, 0, 0), Vector3(0, 0, 0))
         vel_right = Twist(Vector3(0, 0, 0), Vector3(0, 0, w))
@@ -78,12 +101,12 @@ if __name__=="__main__":
             rospy.sleep(1)
             bump = None
 
-        else:
-            vel = Twist(Vector3(-v, 0, 0), Vector3(0, 0, 0))
-            velocity_publisher.publish(vel)
-            rospy.sleep(0.1)
 
         # Checking Laser Scan
         if close_scan:
-            velocity_publisher.publish(close_scan_velocity)
-            rospy.sleep(0.5)
+            velocity_publisher.publish(stop)
+            rospy.sleep(1)
+
+        else:
+            velocity_publisher.publish(vel_forward)
+            rospy.sleep(0.1)

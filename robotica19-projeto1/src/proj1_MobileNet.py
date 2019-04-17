@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 # -*- coding:utf-8 -*-
 
-__author__ = ["Rachel P. B. Moraes", "Igor Montagner", "Fabio Miranda"]
 
 
+# IMPORTS:
 import rospy
 import numpy as np
 import tf
@@ -17,35 +17,49 @@ from cv_bridge import CvBridge, CvBridgeError
 import visao_module
 
 
+
+# VARIÁVEIS GLOBAIS:
 bridge = CvBridge()
 
-cv_image = None
-atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
+# Tempo máximo de atraso, em nano-segundos.
+atraso = 1.5E9
 
 # Só usar se os relógios ROS da Raspberry e do Linux desktop estiverem sincronizados. 
-# Descarta imagens que chegam atrasadas demais
+# Descarta imagens que chegam atrasadas demais.
 check_delay = False
 
+cv_image = None
+cat_seen = False
+cat_center = (0, 0)
+image_center = (0, 0)
 
 
-# A função a seguir é chamada sempre que chega um novo frame
+
 def roda_todo_frame(imagem):
+    """
+        A função a seguir é chamada sempre que chega um novo frame
+    """
+
     global cv_image
     global cat_seen
     global cat_center
     global image_center
 
     now = rospy.get_rostime()
+
     imgtime = imagem.header.stamp
-    lag = now-imgtime # calcula o lag
+
+    lag = now - imgtime # calcula o lag
+
     delay = lag.nsecs
-    #print("delay ", "{:.3f}".format(delay/1.0E9))
-    if delay > atraso and check_delay==True:
+
+    if delay > atraso and check_delay == True:
         print("Descartando por causa do delay do frame:", delay)
         return
 
     try:
         antes = time.clock()
+
         cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
         centro, imagem, resultados =  visao_module.processa(cv_image)
 
@@ -53,7 +67,7 @@ def roda_todo_frame(imagem):
         #print("Image centers: ", image_center)
 
         for r in resultados:
-            if r[0] == "cat":
+            if r[0] == "cat" or r[0] == "dog":
                 cat_seen = True
 
                 # Pegando o centro da imagem do gato:
@@ -67,12 +81,6 @@ def roda_todo_frame(imagem):
 
     except CvBridgeError as e:
         print('ex', e)
-
-
-
-cat_seen = False
-cat_center = (0, 0)
-image_center = (0, 0)
 
 
     
@@ -108,31 +116,42 @@ if __name__=="__main__":
 
         while not rospy.is_shutdown():
             stop = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
-            turn_right_slow = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0.2))
-            turn_left_slow = Twist(Vector3(0, 0, 0), Vector3(0, 0, - 0.2))
+            turn_right_slow = Twist(Vector3(0, 0, 0), Vector3(0, 0, - 0.2))
+            turn_left_slow = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0.2))
+            forward_slow = Twist(Vector3(0.1, 0, 0), Vector3(0, 0, 0))
+            backward_slow = Twist(Vector3(0.1, 0, 0), Vector3(0, 0, 0))
+            time_to_walk = 0.5
 
             if cat_seen:
                 dif = image_center[0] - cat_center[0]
-                print("Distance: ", dif)
+                print("[LOG] DISTANCE: ", dif)
 
                 if dif > -120 and dif < -70:
-                    print("STOP TURNING!")
-                    publisher.publish(stop)
+                    print("[LOG] Moving FORWARD.")
+                    publisher.publish(forward_slow)
+                    rospy.sleep(time_to_walk)
+                    cat_seen = False
                     continue
 
                 elif dif > - 120:
-                    publisher.publish(turn_right_slow)
+                    print("[LOG] Turning LEFT.")
+                    publisher.publish(turn_left_slow)
+                    rospy.sleep(time_to_walk)
+                    cat_seen = False
 
                 elif dif < - 70:
-                    publisher.publish(turn_left_slow)
+                    print("[LOG] Turning RIGHT.")
+                    publisher.publish(turn_right_slow)
+                    rospy.sleep(time_to_walk)
+                    cat_seen = False
 
                 else:
                     publisher.publish(stop)
+                    rospy.sleep(time_to_walk)
 
             else:
                 publisher.publish(stop)
-
-            rospy.sleep(0.1)            
+                rospy.sleep(time_to_walk)            
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
