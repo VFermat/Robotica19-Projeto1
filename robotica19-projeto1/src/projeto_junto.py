@@ -40,8 +40,8 @@ image_center = (0, 0)
 
 bump = None
 v = 0.1
-w = 0.1
-min_distance = 0.3
+w = 0.15
+min_distance = 0.2
 close_scan = False
 close_scan_velocity = None
 scan_v = None
@@ -86,9 +86,17 @@ def roda_todo_frame(imagem):
                 cat_seen = True
 
                 # Pegando o centro da imagem do objeto:
-                cat_center = r[4]
+                cX = (r[2][0] + r[3][0]) / 2
+                cY = (r[2][1] + r[3][1]) / 2
+                cat_center = (cX, cY)
 
                 #print("[LOG] OBJECT FOUND! CENTER AT: ", cat_center)
+
+        if cat_seen == True:
+            cat_seen = True
+
+        else:
+            cat_seen = False
 
         depois = time.clock()
 
@@ -100,6 +108,7 @@ def roda_todo_frame(imagem):
 def get_bump(datas):
     global bump
     bump = datas.data
+    print("[LOG] Bumper: ", bump)
 
 
 
@@ -113,16 +122,10 @@ def analyze_scan(datas):
     scan_cone_front = list(scan_ranges[:45] + scan_ranges[315:])
 
     smallest_distance = min(scan_cone_front)
+    print(smallest_distance)
 
-    while smallest_distance <= 0.1:
-        del scan_cone_front[scan_cone_front.index(smallest_distance)]
-
-        smallest_distance = min(scan_cone_front)
-
-
-
-    if smallest_distance <= min_distance:
-        #print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)    
+    if smallest_distance <= min_distance and smallest_distance != 0.0 and smallest_distance != inf:
+        print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)    
         close_scan = True
 
     else:
@@ -170,20 +173,23 @@ if __name__=="__main__":
         vel_left = Twist(Vector3(0, 0, 0), Vector3(0, 0, w))
         time_to_walk = 0.01
 
+
         # Checking MobileNet
         if cat_seen:
             dif = cat_center[0] - image_center[0]
             print("[LOG] DISTANCE: ", dif)
 
-            if dif > 30:
-                print("[LOG] Turning LEFT.")
-                publisher.publish(vel_left)
+            dif_range = 20
+
+            if dif > dif_range:
+                print("[LOG] Turning RIGHT.")
+                publisher.publish(vel_right)
                 rospy.sleep(time_to_walk)
                 cat_seen = False
 
-            elif dif < -30:
-                print("[LOG] Turning RIGHT.")
-                publisher.publish(vel_right)
+            elif dif < - dif_range:
+                print("[LOG] Turning LEFT.")
+                publisher.publish(vel_left)
                 rospy.sleep(time_to_walk)
                 cat_seen = False
 
@@ -193,37 +199,63 @@ if __name__=="__main__":
                 rospy.sleep(0.2)
                 cat_seen = False
 
+
         # Checking Bumpers
+        time_forward_backward = 0.5
+        time_turn = 2
+
         if bump == 1:
-            publisher.publish(vel_forward)
-            rospy.sleep(1)
+            publisher.publish(vel_backward)
+            rospy.sleep(time_forward_backward)
+
             publisher.publish(vel_right)
-            rospy.sleep(1)
+            rospy.sleep(time_turn)
+
+            publisher.publish(stop)
+            rospy.sleep(time_forward_backward)
+
             bump = None
 
         elif bump == 2:
-            publisher.publish(vel_forward)
-            rospy.sleep(1)
+            publisher.publish(vel_backward)
+            rospy.sleep(time_forward_backward)
+
             publisher.publish(vel_left)
-            rospy.sleep(1)
+            rospy.sleep(time_turn)
+
+            publisher.publish(stop)
+            rospy.sleep(time_forward_backward)
+
             bump = None
 
         elif bump == 3:
-            publisher.publish(vel_backward)
-            rospy.sleep(1)
-            publisher.publish(vel_right)
-            rospy.sleep(1)
+            publisher.publish(vel_forward)
+            rospy.sleep(time_forward_backward)
+
+            publisher.publish(vel_left)
+            rospy.sleep(time_turn)
+
+            publisher.publish(stop)
+            rospy.sleep(time_forward_backward)
+
             bump = None
 
         elif bump == 4:
             publisher.publish(vel_forward)
-            rospy.sleep(1)
-            publisher.publish(vel_backward)
-            rospy.sleep(1)
+            rospy.sleep(time_forward_backward)
+
+            publisher.publish(vel_right)
+            rospy.sleep(time_turn)
+
+            publisher.publish(stop)
+            rospy.sleep(time_forward_backward)
+
             bump = None
 
 
         # Checking Laser Scan
-        if close_scan:
-            publisher.publish(stop)
+        if close_scan == True:
+            publisher.publish(vel_backward)
             rospy.sleep(0.5)
+
+            close_scan = False
