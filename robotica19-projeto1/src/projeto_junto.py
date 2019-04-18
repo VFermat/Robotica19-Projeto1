@@ -288,15 +288,15 @@ if __name__ == "__main__":
 
         
         # COLOR:
-        # if seen_color:
-        #     publisher.publish(color_velocity)
-        #     rospy.sleep(4)
-        #     publisher.publish(stop)
+        if seen_color:
+            publisher.publish(color_velocity)
+            rospy.sleep(4)
+            publisher.publish(stop)
 
 
         # BUMPERS:
-        if bump == 1:
-            publisher.publish(vel_backward)
+        if bump == 2:
+            publisher.publish(vel_forward)
             rospy.sleep(time_move)
 
             publisher.publish(vel_right)
@@ -307,8 +307,8 @@ if __name__ == "__main__":
 
             bump = None
 
-        elif bump == 2:
-            publisher.publish(vel_backward)
+        elif bump == 1:
+            publisher.publish(vel_forward)
             rospy.sleep(time_move)
 
             publisher.publish(vel_left)
@@ -320,7 +320,7 @@ if __name__ == "__main__":
             bump = None
 
         elif bump == 3:
-            publisher.publish(vel_forward)
+            publisher.publish(vel_backward)
             rospy.sleep(time_move)
 
             publisher.publish(vel_left)
@@ -332,7 +332,7 @@ if __name__ == "__main__":
             bump = None
 
         elif bump == 4:
-            publisher.publish(vel_forward)
+            publisher.publish(vel_backward)
             rospy.sleep(time_move)
 
             publisher.publish(vel_right)
