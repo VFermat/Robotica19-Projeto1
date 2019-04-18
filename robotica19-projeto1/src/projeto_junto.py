@@ -2,26 +2,23 @@
 # -*- coding:utf-8 -*-
 
 
-
 # IMPORTS:
-import rospy
-import numpy as np
-from math import sin, cos, radians
-from geometry_msgs.msg import Twist, Vector3
-from std_msgs.msg import UInt8
-from sensor_msgs.msg import LaserScan
-
-import tf
 import math
-import cv2
 import time
-from geometry_msgs.msg import Twist, Vector3, Pose
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CompressedImage
+from math import cos, radians, sin
+
+import numpy as np
+import rospy
+import tf
 from cv_bridge import CvBridge, CvBridgeError
+from geometry_msgs.msg import Pose, Twist, Vector3
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import CompressedImage, Image, LaserScan
+from std_msgs.msg import UInt8
+
+import analiza_cor
+import cv2
 import visao_module
-
-
 
 # VARIÁVEIS GLOBAIS:
 bridge = CvBridge()
@@ -29,24 +26,32 @@ bridge = CvBridge()
 # Tempo máximo de atraso, em nano-segundos.
 atraso = 1.5E9
 
-# Só usar se os relógios ROS da Raspberry e do Linux desktop estiverem sincronizados. 
+# Só usar se os relógios ROS da Raspberry e do Linux desktop estiverem sincronizados.
 # Descarta imagens que chegam atrasadas demais.
 check_delay = True
 
+# Variáveis globais do MobileNet
 cv_image = None
 cat_seen = False
 cat_center = (0, 0)
 image_center = (0, 0)
 
+# Variáveis Globais do Bumper
 bump = None
 v = 0.1
 w = 0.15
+
+# Variáveis globais do LaserScan
 min_distance = 0.2
 close_scan = False
 close_scan_velocity = None
 scan_v = None
 scan_w = None
 
+# Variáveis globais do Reconhecimento de Cor
+max_area_accepted = 25
+seen_color = False
+color_velocity = Twist(Vector3(0, 0, 0), Vector3(0, 0, 1.5))
 
 
 def roda_todo_frame(imagem):
@@ -64,7 +69,7 @@ def roda_todo_frame(imagem):
 
     imgtime = imagem.header.stamp
 
-    lag = now - imgtime # calcula o lag
+    lag = now - imgtime  # calcula o lag
 
     delay = lag.nsecs
     #print("-----------DELAY: ", delay)
@@ -76,8 +81,9 @@ def roda_todo_frame(imagem):
     try:
         antes = time.clock()
 
+        # Script para o MobileNet
         cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
-        centro, imagem, resultados =  visao_module.processa(cv_image)
+        centro, imagem, resultados = visao_module.processa(cv_image)
 
         image_center = centro
 
@@ -98,18 +104,24 @@ def roda_todo_frame(imagem):
         else:
             cat_seen = False
 
+        # Script para a detecção de cores
+        color_media, color_center, color_area = analiza_cor.identifica_cor(
+            cv_image)
+        if color_area >= max_area_accepted:
+            seen_color = True
+        else:
+            seen_color = False
+
         depois = time.clock()
 
     except CvBridgeError as e:
         print('ex', e)
 
 
-
 def get_bump(datas):
     global bump
     bump = datas.data
     print("[LOG] Bumper: ", bump)
-
 
 
 def analyze_scan(datas):
@@ -125,15 +137,14 @@ def analyze_scan(datas):
     print(smallest_distance)
 
     if smallest_distance <= min_distance and smallest_distance != 0.0 and smallest_distance != inf:
-        print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)    
+        print("[LOG] CLOSEST OBJECT(m): ", smallest_distance)
         close_scan = True
 
     else:
         close_scan = False
 
 
-
-if __name__=="__main__":
+if __name__ == "__main__":
 
     rospy.init_node("projeto")
 
@@ -144,22 +155,23 @@ if __name__=="__main__":
     #   Primeiro instale o suporte https://github.com/Insper/robot19/blob/master/guides/debugar_sem_robo_opencv_melodic.md
     #
     #	Depois faça:
-    #	
+    #
     #	rosrun cv_camera cv_camera_node
     #
     # 	rosrun topic_tools relay  /cv_camera/image_raw/compressed /kamera
     #
-    # 
+    #
     # Para renomear a câmera simulada do Gazebo
-    # 
+    #
     # 	rosrun topic_tools relay  /camera/rgb/image_raw/compressed /kamera
-    # 
+    #
     # Para renomear a câmera da Raspberry
-    # 
+    #
     # 	rosrun topic_tools relay /raspicam_node/image/compressed /kamera
-    # 
+    #
 
-    image_receiver = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    image_receiver = rospy.Subscriber(
+        topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size=2**24)
 
     publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=3)
     bump_receiver = rospy.Subscriber("/bumper", UInt8, get_bump)
@@ -172,7 +184,6 @@ if __name__=="__main__":
         vel_right = Twist(Vector3(0, 0, 0), Vector3(0, 0, -w))
         vel_left = Twist(Vector3(0, 0, 0), Vector3(0, 0, w))
         time_to_walk = 0.01
-
 
         # Checking MobileNet
         if cat_seen:
@@ -198,7 +209,6 @@ if __name__=="__main__":
                 publisher.publish(vel_forward)
                 rospy.sleep(0.2)
                 cat_seen = False
-
 
         # Checking Bumpers
         time_forward_backward = 0.5
@@ -252,10 +262,14 @@ if __name__=="__main__":
 
             bump = None
 
-
         # Checking Laser Scan
         if close_scan == True:
             publisher.publish(vel_backward)
             rospy.sleep(0.5)
 
             close_scan = False
+
+        if seen_color:
+            publisher.publish(color_velocity)
+            rospy.sleep(4)
+            publisher.publish(stop)
