@@ -49,7 +49,7 @@ scan_v = None
 scan_w = None
 
 # Variáveis globais do Reconhecimento de Cor
-max_area_accepted = 25
+max_area_accepted = 60000
 seen_color = False
 color_velocity = Twist(Vector3(0, 0, 0), Vector3(0, 0, 1.5))
 
@@ -64,6 +64,7 @@ def roda_todo_frame(imagem):
     global cat_center
     global image_center
     global atraso
+    global seen_color
 
     now = rospy.get_rostime()
 
@@ -83,7 +84,7 @@ def roda_todo_frame(imagem):
 
         # Script para o MobileNet
         cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
-        centro, imagem, resultados = visao_module.processa(cv_image)
+        centro, resultados = visao_module.processa(cv_image)
 
         image_center = centro
 
@@ -105,7 +106,7 @@ def roda_todo_frame(imagem):
             cat_seen = False
 
         # Script para a detecção de cores
-        color_media, color_center, color_area = analiza_cor.identifica_cor(
+        color_area = analiza_cor.identifica_cor(
             cv_image)
         if color_area >= max_area_accepted:
             seen_color = True

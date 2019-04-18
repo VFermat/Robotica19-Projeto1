@@ -33,7 +33,7 @@ def processa(frame):
     cv2.imshow('video', result_frame)
     cv2.waitKey(1)
 
-    return centro, result_frame, result_tuples
+    return centro, result_tuples
 
 
 
